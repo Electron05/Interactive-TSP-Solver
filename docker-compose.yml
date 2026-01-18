@@ -1,0 +1,33 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: tsp-cpp-backend
+    ports:
+      - "8080:8080"
+    networks:
+      - tsp-network
+    tty: true # keep the container open if the process finishes
+  
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: tsp-angular-frontend
+    ports:
+      - "4200:4200"
+    networks:
+      - tsp-network
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+    depends_on:
+      - backend
+    command:  ng serve --host 0.0.0.0 --allowed-hosts=all --poll 2000
+
+networks:
+  tsp-network:
+    driver: bridge
