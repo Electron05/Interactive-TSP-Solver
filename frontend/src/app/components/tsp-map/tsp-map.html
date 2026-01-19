@@ -1,0 +1,17 @@
+<div class="container">
+  <canvas #mapCanvas></canvas>
+   <table class="data-table">
+    <thead>
+      <tr>
+        <th>From \ To</th>
+        <th *ngFor="let circle of circles; let i = index">{{ i + 1 }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let from of circles; let i = index">
+        <td>{{ i + 1 }}</td>
+		    <td *ngFor="let to of circles; let j = index">{{distances[i][j]}}</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
