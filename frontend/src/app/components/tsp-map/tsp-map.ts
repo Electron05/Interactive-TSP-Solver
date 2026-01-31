@@ -1,6 +1,8 @@
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { ViewChild, ElementRef, AfterViewInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { SolverService } from '../../services/solver';
+import { BackendResponse } from '../../models/Response';
 
 @Component({
   selector: 'app-tsp-map',
@@ -8,16 +10,28 @@ import { CommonModule } from '@angular/common';
   styleUrl: './tsp-map.scss',
   imports: [CommonModule]
 })
-export class TspMapComponent implements AfterViewInit {
+export class TspMapComponent implements AfterViewInit, OnInit {
   @ViewChild('mapCanvas') canvas!: ElementRef<HTMLCanvasElement>;
   private ctx!: CanvasRenderingContext2D;
-  public circles: { x: number; y: number }[] = []; // Store circle positions
+  public cities: { x: number; y: number }[] = []; // Store cities positions
   public distances: number[][] = [];
 
   private readonly CIRCLE_RADIUS = 10;
   private readonly CLICK_TOLERANCE = 15;
   private readonly FONT = '12px Arial';
   private readonly ROUNDING_PRECISION = 100;
+    private readonly PATH_WIDTH = 12;
+
+  constructor(private solverService: SolverService) {}
+
+  ngOnInit(): void {
+    this.solverService.getSolverUpdates().subscribe(msg => {
+      console.log('Received from backend:', msg);
+      let response: BackendResponse = msg as BackendResponse;
+      let path: number[] = JSON.parse(response.payload);
+      this.drawCalculatedPath(path);
+    });
+  }
 
   ngAfterViewInit(): void {
     const canvasEl = this.canvas.nativeElement;
@@ -33,7 +47,7 @@ export class TspMapComponent implements AfterViewInit {
       const x = (event.clientX - rect.left) * scaleX;
       const y = (event.clientY - rect.top) * scaleY;
 
-      const isNearCircle = this.circles.some(circle => {
+      const isNearCircle = this.cities.some(circle => {
         const distance = Math.sqrt((circle.x - x) ** 2 + (circle.y - y) ** 2);
         return distance < this.CLICK_TOLERANCE;
       });
@@ -48,15 +62,15 @@ export class TspMapComponent implements AfterViewInit {
       const x = (event.clientX - rect.left) * scaleX;
       const y = (event.clientY - rect.top) * scaleY;
 
-      const index = this.circles.findIndex(circle => {
+      const index = this.cities.findIndex(circle => {
         const distance = Math.sqrt((circle.x - x) ** 2 + (circle.y - y) ** 2);
         return distance < this.CLICK_TOLERANCE; // Tolerance
       });
 
       if (index !== -1) {
-        this.circles.splice(index, 1);
+        this.cities.splice(index, 1);
       } else {
-        this.circles.push({ x, y });
+        this.cities.push({ x, y });
         canvasEl.style.cursor = 'pointer';
       }
 
@@ -78,9 +92,20 @@ export class TspMapComponent implements AfterViewInit {
     this.ctx.fillText((index + 1).toString(), x, y);
   }
 
+  private drawCalculatedPath(pathNodeIndices: number[]){
+    if(this.cities.length < 2) return;
+    this.ctx.beginPath();
+    this.ctx.lineWidth = this.PATH_WIDTH;
+    this.ctx.moveTo(this.cities[0].x, this.cities[0].y);
+    for(let i = 1; i < pathNodeIndices.length; i++){
+      this.ctx.lineTo(this.cities[i].x, this.cities[i].y);
+    }
+    this.ctx.stroke();
+  }
+
   private redraw() {
     this.ctx.clearRect(0, 0, this.canvas.nativeElement.width, this.canvas.nativeElement.height);
-    this.circles.forEach((circle,index) => this.drawCircle(circle.x, circle.y,index));
+    this.cities.forEach((circle,index) => this.drawCircle(circle.x, circle.y,index));
     
   }
 
@@ -88,10 +113,10 @@ export class TspMapComponent implements AfterViewInit {
     this.distances = [];
 
     let i = 0;
-    this.circles.forEach(from => {
-      this.distances.push(new Array(this.circles.length));
+    this.cities.forEach(from => {
+      this.distances.push(new Array(this.cities.length));
       let j = 0;
-      this.circles.forEach(to => {
+      this.cities.forEach(to => {
         if(i==j){
           this.distances[i][j] = 0;
         }
@@ -107,5 +132,11 @@ export class TspMapComponent implements AfterViewInit {
       });
       i++;
     });
+  }
+
+  sendDistances() {
+    if (this.distances.length > 0) {
+      this.solverService.sendTSPData(this.distances);
+    }
   }
 }

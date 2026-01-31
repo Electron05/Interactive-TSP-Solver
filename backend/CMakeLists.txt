@@ -6,8 +6,9 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(Threads REQUIRED)
+find_package(Boost REQUIRED COMPONENTS system)
 
-include_directories(include)
+
 
 set(SOURCES 
     src/main.cpp
@@ -15,7 +16,8 @@ set(SOURCES
 
 add_executable(solver ${SOURCES})
 
-target_link_libraries(solver PRIVATE Threads::Threads)
+target_include_directories(solver PRIVATE include ${Boost_INCLUDE_DIRS})
+target_link_libraries(solver PRIVATE Threads::Threads ${Boost_LIBRARIES})
 
 if(MSVC)
     target_compile_options(solver PRIVATE /W4)
