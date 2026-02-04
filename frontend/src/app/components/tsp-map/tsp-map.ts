@@ -1,6 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { ViewChild, ElementRef, AfterViewInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { SolverService } from '../../services/solver';
 import { BackendResponse } from '../../models/Response';
 
@@ -8,19 +9,23 @@ import { BackendResponse } from '../../models/Response';
   selector: 'app-tsp-map',
   templateUrl: './tsp-map.html',
   styleUrl: './tsp-map.scss',
-  imports: [CommonModule]
+  imports: [CommonModule, FormsModule]
 })
 export class TspMapComponent implements AfterViewInit, OnInit {
   @ViewChild('mapCanvas') canvas!: ElementRef<HTMLCanvasElement>;
   private ctx!: CanvasRenderingContext2D;
-  public cities: { x: number; y: number }[] = []; // Store cities positions
+  public cities: { x: number; y: number }[] = [];
   public distances: number[][] = [];
+  public alpha: number = 1;
+  public beta: number = 2;
+  public rho: number = 0.1;
+  public showTable: boolean = true;
 
   private readonly CIRCLE_RADIUS = 10;
   private readonly CLICK_TOLERANCE = 15;
   private readonly FONT = '12px Arial';
   private readonly ROUNDING_PRECISION = 100;
-    private readonly PATH_WIDTH = 12;
+  private readonly PATH_WIDTH = 8;
 
   constructor(private solverService: SolverService) {}
 
@@ -28,7 +33,7 @@ export class TspMapComponent implements AfterViewInit, OnInit {
     this.solverService.getSolverUpdates().subscribe(msg => {
       console.log('Received from backend:', msg);
       let response: BackendResponse = msg as BackendResponse;
-      let path: number[] = JSON.parse(response.payload);
+      let path: number[] = response.payload;
       this.drawCalculatedPath(path);
     });
   }
@@ -93,14 +98,17 @@ export class TspMapComponent implements AfterViewInit, OnInit {
   }
 
   private drawCalculatedPath(pathNodeIndices: number[]){
+    this.redraw();
     if(this.cities.length < 2) return;
-    this.ctx.beginPath();
     this.ctx.lineWidth = this.PATH_WIDTH;
-    this.ctx.moveTo(this.cities[0].x, this.cities[0].y);
-    for(let i = 1; i < pathNodeIndices.length; i++){
-      this.ctx.lineTo(this.cities[i].x, this.cities[i].y);
+    for (let i = 0; i < pathNodeIndices.length - 1; i++) {
+        const current = this.cities[pathNodeIndices[i]];
+        const next = this.cities[pathNodeIndices[i + 1]];
+        this.ctx.beginPath();
+        this.ctx.moveTo(current.x, current.y);
+        this.ctx.lineTo(next.x, next.y);
+        this.ctx.stroke();
     }
-    this.ctx.stroke();
   }
 
   private redraw() {
@@ -136,7 +144,7 @@ export class TspMapComponent implements AfterViewInit, OnInit {
 
   sendDistances() {
     if (this.distances.length > 0) {
-      this.solverService.sendTSPData(this.distances);
+      this.solverService.sendTSPData(this.distances, this.alpha, this.beta, this.rho);
     }
   }
 }

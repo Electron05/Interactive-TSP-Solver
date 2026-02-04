@@ -8,12 +8,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
+WORKDIR /workspace
 
-COPY . .
+COPY . ./backend
 
-RUN mkdir -p build && cd build && \
+RUN mkdir -p backend/build && cd backend/build && \
     cmake .. && \
     make
-
-CMD ["./build/solver"]

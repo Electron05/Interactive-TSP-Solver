@@ -3,9 +3,12 @@
 #include <boost/beast/websocket.hpp>
 #include <boost/asio.hpp>
 #include <nlohmann/json.hpp>
-#include <iostream>
 #include <memory>
 #include <thread>
+#include <vector>
+#include <cstdlib>
+#include <ctime>
+#include "tsp_solver.hpp"
 
 namespace beast = boost::beast;
 namespace http = beast::http;
@@ -16,7 +19,6 @@ using json = nlohmann::json;
 
 
 // I am new to websockets so...
-// Source ?
 // https://www.boost.org/doc/libs/1_82_0/libs/beast/example/websocket/server/async/websocket_server_async.cpp
 
 void do_session(tcp::socket socket){
@@ -39,18 +41,18 @@ void do_session(tcp::socket socket){
             std::string msg = beast::buffers_to_string(buffer.data());
             std::cout << "Received: " << msg << std::endl;
             
-            // Build response as a simple path: [0, 1, 2, ..., num_cities-1]
+
             json query = json::parse(msg);
-            size_t num_cities = query["data"].size();
-            std::string payload = "[0";
-            for (size_t i = 1; i < num_cities; ++i) {
-                payload += ", " + std::to_string(i);
-            }
-            payload += "]";
+            std::vector<std::vector<float>> distanceMatrix = query["data"];
+            float alpha = query["alpha"];
+            float beta = query["beta"];
+            float rho = query["rho"];
+            
+            std::vector<int> payload = solveTSP(distanceMatrix, alpha, beta, rho);
 
             // Return calculated path
             json answer;
-            answer["type"] = "path";
+            answer["type"] = "path1";
             answer["payload"] = payload;
             ws.write(net::buffer(answer.dump()));
             
@@ -72,8 +74,11 @@ int main(){
 	tcp::acceptor acceptor{ioc, tcp::endpoint{tcp::v4(), 8080}};
 
 	std::cout << "WebSocket server listening on port 8080..." << std::endl;
-
-	for(;;){
+    unsigned int num_cores = std::thread::hardware_concurrency();
+    std::cout << "Threads: " << std::to_string(num_cores) << std::endl;
+	
+    srand(time(0));  // Seed once here
+    for(;;){
 		tcp::socket socket{ioc};
 		acceptor.accept(socket);
 

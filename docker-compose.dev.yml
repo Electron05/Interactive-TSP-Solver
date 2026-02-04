@@ -2,13 +2,17 @@ services:
   backend:
     build:
       context: ./backend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     container_name: tsp-cpp-backend
     ports:
       - "8080:8080"
     networks:
       - tsp-network
-    command: ./build/solver 
+    volumes:
+      - .:/workspace:cached
+      - /workspace/backend/build
+    working_dir: /workspace
+    command: sh -c "while sleep 1000; do :; done"
 
   frontend:
     build:

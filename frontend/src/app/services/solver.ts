@@ -14,8 +14,8 @@ export class SolverService {
     });
   }
 
-  sendTSPData(distances: number[][]):void{
-    this.socket$.next({type: 'solve', data:distances});
+  sendTSPData(distances: number[][], alpha: number, beta: number, rho: number):void{
+    this.socket$.next({type: 'solve', data:distances, alpha, beta, rho});
     
   }
 
