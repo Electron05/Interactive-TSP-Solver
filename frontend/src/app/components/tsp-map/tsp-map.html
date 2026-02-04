@@ -1,6 +1,18 @@
 <div class="container">
-  <canvas #mapCanvas></canvas>
-   <table class="data-table">
+  <h1 class="header">TSP Solver</h1>
+  <div class="map-section">
+    <canvas #mapCanvas class="map-canvas"></canvas>
+    <div class="sliders">
+      <label>Alpha (Pheromone): {{alpha}} <input type="range" min="0" max="5" step="0.1" [(ngModel)]="alpha" /></label>
+      <label>Beta (Distance): {{beta}} <input type="range" min="1" max="5" step="0.1" [(ngModel)]="beta" /></label>
+      <label>Rho (Evaporation): {{rho}} <input type="range" min="0.01" max="0.8" step="0.01" [(ngModel)]="rho" /></label>
+    </div>
+  </div>
+  <button (click)="sendDistances()" [disabled]="cities.length < 2">Solve TSP</button>
+  <label class="checkbox-label">
+    <input type="checkbox" [(ngModel)]="showTable" /> Show Distance Table
+  </label>
+  <table *ngIf="showTable" class="data-table">
     <thead>
       <tr>
         <th>From \ To</th>
@@ -10,9 +22,8 @@
     <tbody>
       <tr *ngFor="let from of cities; let i = index">
         <td>{{ i + 1 }}</td>
-		    <td *ngFor="let to of cities; let j = index">{{distances[i][j]}}</td>
+        <td *ngFor="let to of cities; let j = index">{{distances[i][j]}}</td>
       </tr>
     </tbody>
   </table>
-  <button (click)="sendDistances()" [disabled]="cities.length < 2">Solve TSP</button>
 </div>

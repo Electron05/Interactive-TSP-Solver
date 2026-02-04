@@ -12,6 +12,7 @@ find_package(Boost REQUIRED COMPONENTS system)
 
 set(SOURCES 
     src/main.cpp
+    src/tsp_solver.cpp
 )
 
 add_executable(solver ${SOURCES})

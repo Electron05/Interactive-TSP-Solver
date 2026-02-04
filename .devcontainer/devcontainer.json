@@ -1,0 +1,21 @@
+{
+    "name": "TSP Full Stack Dev",
+    "dockerComposeFile": [
+        "../docker-compose.dev.yml"
+    ],
+    "service": "backend",
+    "workspaceFolder": "/workspace",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-vscode.cpptools",
+                "ms-vscode.cmake-tools"
+            ],
+            "settings": {
+                "cmake.sourceDirectory": "${workspaceFolder}/backend",
+                "cmake.buildDirectory": "${workspaceFolder}/backend/build"
+            }
+        }
+    },
+    "remoteUser": "root"
+}
