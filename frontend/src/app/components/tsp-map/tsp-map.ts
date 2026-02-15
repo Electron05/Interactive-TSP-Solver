@@ -27,7 +27,6 @@ export class TspMapComponent implements AfterViewInit, OnInit {
   private readonly ROUNDING_PRECISION = 100;
   private readonly PATH_WIDTH = 8;
 
-  // Pan and zoom properties
   private offsetX: number = 0;
   private offsetY: number = 0;
   private scale: number = 1;
@@ -38,7 +37,6 @@ export class TspMapComponent implements AfterViewInit, OnInit {
   private dragThreshold: number = 5;
   private currentPath: number[] | null = null;
 
-  // Undo/Redo
   private undoStack: { x: number; y: number }[][] = [];
   private redoStack: { x: number; y: number }[][] = [];
 
@@ -61,7 +59,6 @@ export class TspMapComponent implements AfterViewInit, OnInit {
     canvasEl.height = canvasEl.offsetHeight;
     this.ctx = canvasEl.getContext('2d')!;
 
-    // Mouse move for cursor and dragging
     canvasEl.addEventListener('mousemove', (event) => {
       const { x, y } = this.getMousePos(event);
 
@@ -88,7 +85,6 @@ export class TspMapComponent implements AfterViewInit, OnInit {
       }
     });
 
-    // Mouse down for starting potential drag or clicking
     canvasEl.addEventListener('mousedown', (event) => {
       const { x, y } = this.getMousePos(event);
       const worldX = (x - this.offsetX) / this.scale;
@@ -100,14 +96,12 @@ export class TspMapComponent implements AfterViewInit, OnInit {
       });
 
       if (index !== -1) {
-        // Click on city: remove it
         this.saveState();
         this.cities.splice(index, 1);
-        this.currentPath = null; // Clear path as indices may be invalid
+        this.currentPath = null;
         this.recalculateDistances();
         this.redraw();
       } else {
-        // Start potential dragging
         this.isDragging = true;
         this.hasDragged = false;
         this.lastMouseX = x;
@@ -115,18 +109,16 @@ export class TspMapComponent implements AfterViewInit, OnInit {
       }
     });
 
-    // Mouse up to stop dragging or add city
     canvasEl.addEventListener('mouseup', (event) => {
       if (this.isDragging) {
         if (!this.hasDragged) {
-          // It was a click, add city
           const { x, y } = this.getMousePos(event);
           const worldX = (x - this.offsetX) / this.scale;
           const worldY = (y - this.offsetY) / this.scale;
           if (isFinite(worldX) && isFinite(worldY)) {
             this.saveState();
             this.cities.push({ x: worldX, y: worldY });
-            this.currentPath = null; // Clear path as indices may be invalid
+            this.currentPath = null;
             this.redraw();
             this.recalculateDistances();
           }
@@ -137,7 +129,6 @@ export class TspMapComponent implements AfterViewInit, OnInit {
       }
     });
 
-    // Wheel for zooming
     canvasEl.addEventListener('wheel', (event) => {
       event.preventDefault();
       const { x, y } = this.getMousePos(event);
@@ -145,10 +136,8 @@ export class TspMapComponent implements AfterViewInit, OnInit {
       this.zoomAt(x, y, zoomFactor);
     });
 
-    // Prevent context menu on right click
     canvasEl.addEventListener('contextmenu', (event) => event.preventDefault());
 
-    // Keyboard shortcuts for undo/redo
     document.addEventListener('keydown', (event) => {
       if (event.ctrlKey || event.metaKey) {
         if (event.key === 'z' && !event.shiftKey) {
@@ -160,6 +149,8 @@ export class TspMapComponent implements AfterViewInit, OnInit {
         }
       }
     });
+
+    this.redraw();
   }
 
   private getMousePos(event: MouseEvent): { x: number; y: number } {
@@ -198,14 +189,14 @@ export class TspMapComponent implements AfterViewInit, OnInit {
 
   private saveState() {
     this.undoStack.push([...this.cities]);
-    this.redoStack = []; // Clear redo on new action
+    this.redoStack = [];
   }
 
   undo() {
     if (this.undoStack.length > 0) {
       this.redoStack.push([...this.cities]);
       this.cities = this.undoStack.pop()!;
-      this.currentPath = null; // Clear path as indices may be invalid
+      this.currentPath = null;
       this.recalculateDistances();
       this.redraw();
     }
@@ -215,7 +206,7 @@ export class TspMapComponent implements AfterViewInit, OnInit {
     if (this.redoStack.length > 0) {
       this.undoStack.push([...this.cities]);
       this.cities = this.redoStack.pop()!;
-      this.currentPath = null; // Clear path as indices may be invalid
+      this.currentPath = null;
       this.recalculateDistances();
       this.redraw();
     }
@@ -256,7 +247,7 @@ export class TspMapComponent implements AfterViewInit, OnInit {
     this.ctx.strokeStyle = 'lightgray';
     this.ctx.lineWidth = 1 / this.scale;
     const gridSize = 100;
-    // Vertical lines
+
     const startX = Math.floor((-this.offsetX / this.scale) / gridSize) * gridSize;
     const endX = Math.ceil(((this.canvas.nativeElement.width - this.offsetX) / this.scale) / gridSize) * gridSize;
     for (let x = startX; x <= endX; x += gridSize) {
@@ -265,7 +256,7 @@ export class TspMapComponent implements AfterViewInit, OnInit {
       this.ctx.lineTo(x, 10000);
       this.ctx.stroke();
     }
-    // Horizontal lines
+
     const startY = Math.floor((-this.offsetY / this.scale) / gridSize) * gridSize;
     const endY = Math.ceil(((this.canvas.nativeElement.height - this.offsetY) / this.scale) / gridSize) * gridSize;
     for (let y = startY; y <= endY; y += gridSize) {
@@ -281,9 +272,9 @@ export class TspMapComponent implements AfterViewInit, OnInit {
     this.ctx.save();
     this.ctx.translate(this.offsetX, this.offsetY);
     this.ctx.scale(this.scale, this.scale);
-    // Draw grid
+
     this.drawGrid();
-    // Draw path under circles
+
     if (this.currentPath && this.cities.length >= 2) {
       this.ctx.strokeStyle = 'black';
       this.ctx.lineWidth = 3 / this.scale;
@@ -297,7 +288,7 @@ export class TspMapComponent implements AfterViewInit, OnInit {
       }
     }
     this.ctx.restore();
-    // Draw circles on top at fixed size
+    
     this.cities.forEach((circle, index) => {
       const screenX = this.offsetX + circle.x * this.scale;
       const screenY = this.offsetY + circle.y * this.scale;
