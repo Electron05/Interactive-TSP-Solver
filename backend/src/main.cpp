@@ -39,7 +39,7 @@ void do_session(tcp::socket socket){
             
             // Log receiving
             std::string msg = beast::buffers_to_string(buffer.data());
-            std::cout << "Received: " << msg << std::endl;
+            //std::cout << "Received: " << msg << std::endl;
             
 
             json query = json::parse(msg);
