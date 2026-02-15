@@ -3,6 +3,10 @@
   <div class="map-section">
     <canvas #mapCanvas class="map-canvas"></canvas>
     <div class="sliders">
+      <div class="zoom-controls">
+        <button (click)="zoomIn()">Zoom In (+)</button>
+        <button (click)="zoomOut()">Zoom Out (-)</button>
+      </div>
       <label>Alpha (Pheromone): {{alpha}} <input type="range" min="0" max="5" step="0.1" [(ngModel)]="alpha" /></label>
       <label>Beta (Distance): {{beta}} <input type="range" min="1" max="5" step="0.1" [(ngModel)]="beta" /></label>
       <label>Rho (Evaporation): {{rho}} <input type="range" min="0.01" max="0.8" step="0.01" [(ngModel)]="rho" /></label>

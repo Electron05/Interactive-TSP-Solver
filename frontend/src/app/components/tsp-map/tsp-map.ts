@@ -27,6 +27,21 @@ export class TspMapComponent implements AfterViewInit, OnInit {
   private readonly ROUNDING_PRECISION = 100;
   private readonly PATH_WIDTH = 8;
 
+  // Pan and zoom properties
+  private offsetX: number = 0;
+  private offsetY: number = 0;
+  private scale: number = 1;
+  private isDragging: boolean = false;
+  private hasDragged: boolean = false;
+  private lastMouseX: number = 0;
+  private lastMouseY: number = 0;
+  private dragThreshold: number = 5;
+  private currentPath: number[] | null = null;
+
+  // Undo/Redo
+  private undoStack: { x: number; y: number }[][] = [];
+  private redoStack: { x: number; y: number }[][] = [];
+
   constructor(private solverService: SolverService) {}
 
   ngOnInit(): void {
@@ -34,7 +49,8 @@ export class TspMapComponent implements AfterViewInit, OnInit {
       console.log('Received from backend:', msg);
       let response: BackendResponse = msg as BackendResponse;
       let path: number[] = response.payload;
-      this.drawCalculatedPath(path);
+      this.currentPath = path;
+      this.redraw();
     });
   }
 
@@ -45,76 +61,248 @@ export class TspMapComponent implements AfterViewInit, OnInit {
     canvasEl.height = canvasEl.offsetHeight;
     this.ctx = canvasEl.getContext('2d')!;
 
+    // Mouse move for cursor and dragging
     canvasEl.addEventListener('mousemove', (event) => {
-      const rect = canvasEl.getBoundingClientRect();
-      const scaleX = canvasEl.width / rect.width;
-      const scaleY = canvasEl.height / rect.height;
-      const x = (event.clientX - rect.left) * scaleX;
-      const y = (event.clientY - rect.top) * scaleY;
+      const { x, y } = this.getMousePos(event);
 
-      const isNearCircle = this.cities.some(circle => {
-        const distance = Math.sqrt((circle.x - x) ** 2 + (circle.y - y) ** 2);
-        return distance < this.CLICK_TOLERANCE;
-      });
-
-      canvasEl.style.cursor = isNearCircle ? 'pointer' : 'crosshair';
+      if (this.isDragging) {
+        const deltaX = x - this.lastMouseX;
+        const deltaY = y - this.lastMouseY;
+        if (Math.abs(deltaX) > this.dragThreshold || Math.abs(deltaY) > this.dragThreshold) {
+          this.hasDragged = true;
+          canvasEl.style.cursor = 'grabbing';
+          this.offsetX += deltaX;
+          this.offsetY += deltaY;
+          this.lastMouseX = x;
+          this.lastMouseY = y;
+          this.redraw();
+        }
+      } else {
+        const worldX = (x - this.offsetX) / this.scale;
+        const worldY = (y - this.offsetY) / this.scale;
+        const isNearCircle = this.cities.some(circle => {
+          const distance = Math.sqrt((circle.x - worldX) ** 2 + (circle.y - worldY) ** 2);
+          return distance < this.CLICK_TOLERANCE / this.scale;
+        });
+        canvasEl.style.cursor = isNearCircle ? 'pointer' : 'grab';
+      }
     });
 
-    canvasEl.addEventListener('click', (event) => {
-      const rect = canvasEl.getBoundingClientRect();
-      const scaleX = canvasEl.width / rect.width;
-      const scaleY = canvasEl.height / rect.height;
-      const x = (event.clientX - rect.left) * scaleX;
-      const y = (event.clientY - rect.top) * scaleY;
+    // Mouse down for starting potential drag or clicking
+    canvasEl.addEventListener('mousedown', (event) => {
+      const { x, y } = this.getMousePos(event);
+      const worldX = (x - this.offsetX) / this.scale;
+      const worldY = (y - this.offsetY) / this.scale;
 
       const index = this.cities.findIndex(circle => {
-        const distance = Math.sqrt((circle.x - x) ** 2 + (circle.y - y) ** 2);
-        return distance < this.CLICK_TOLERANCE; // Tolerance
+        const distance = Math.sqrt((circle.x - worldX) ** 2 + (circle.y - worldY) ** 2);
+        return distance < this.CLICK_TOLERANCE / this.scale;
       });
 
       if (index !== -1) {
+        // Click on city: remove it
+        this.saveState();
         this.cities.splice(index, 1);
+        this.currentPath = null; // Clear path as indices may be invalid
+        this.recalculateDistances();
+        this.redraw();
       } else {
-        this.cities.push({ x, y });
-        canvasEl.style.cursor = 'pointer';
+        // Start potential dragging
+        this.isDragging = true;
+        this.hasDragged = false;
+        this.lastMouseX = x;
+        this.lastMouseY = y;
       }
+    });
 
-      this.redraw();
-      this.recalculateDistances();
+    // Mouse up to stop dragging or add city
+    canvasEl.addEventListener('mouseup', (event) => {
+      if (this.isDragging) {
+        if (!this.hasDragged) {
+          // It was a click, add city
+          const { x, y } = this.getMousePos(event);
+          const worldX = (x - this.offsetX) / this.scale;
+          const worldY = (y - this.offsetY) / this.scale;
+          if (isFinite(worldX) && isFinite(worldY)) {
+            this.saveState();
+            this.cities.push({ x: worldX, y: worldY });
+            this.currentPath = null; // Clear path as indices may be invalid
+            this.redraw();
+            this.recalculateDistances();
+          }
+        }
+        this.isDragging = false;
+        this.hasDragged = false;
+        canvasEl.style.cursor = 'grab';
+      }
+    });
+
+    // Wheel for zooming
+    canvasEl.addEventListener('wheel', (event) => {
+      event.preventDefault();
+      const { x, y } = this.getMousePos(event);
+      const zoomFactor = Math.pow(1.5, -event.deltaY / 100);
+      this.zoomAt(x, y, zoomFactor);
+    });
+
+    // Prevent context menu on right click
+    canvasEl.addEventListener('contextmenu', (event) => event.preventDefault());
+
+    // Keyboard shortcuts for undo/redo
+    document.addEventListener('keydown', (event) => {
+      if (event.ctrlKey || event.metaKey) {
+        if (event.key === 'z' && !event.shiftKey) {
+          event.preventDefault();
+          this.undo();
+        } else if ((event.key === 'y') || (event.key === 'z' && event.shiftKey)) {
+          event.preventDefault();
+          this.redo();
+        }
+      }
     });
   }
 
+  private getMousePos(event: MouseEvent): { x: number; y: number } {
+    const canvasEl = this.canvas.nativeElement;
+    const rect = canvasEl.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return { x: 0, y: 0 };
+    const scaleX = canvasEl.width / rect.width;
+    const scaleY = canvasEl.height / rect.height;
+    return {
+      x: (event.clientX - rect.left) * scaleX,
+      y: (event.clientY - rect.top) * scaleY
+    };
+  }
+
+  private zoomAt(canvasX: number, canvasY: number, factor: number) {
+    const worldX = (canvasX - this.offsetX) / this.scale;
+    const worldY = (canvasY - this.offsetY) / this.scale;
+    this.scale *= factor;
+    this.scale = Math.max(0.1, Math.min(2, this.scale));
+    this.offsetX = canvasX - worldX * this.scale;
+    this.offsetY = canvasY - worldY * this.scale;
+    this.redraw();
+  }
+
+  zoomIn() {
+    const centerX = this.canvas.nativeElement.width / 2;
+    const centerY = this.canvas.nativeElement.height / 2;
+    this.zoomAt(centerX, centerY, 1.2);
+  }
+
+  zoomOut() {
+    const centerX = this.canvas.nativeElement.width / 2;
+    const centerY = this.canvas.nativeElement.height / 2;
+    this.zoomAt(centerX, centerY, 1 / 1.2);
+  }
+
+  private saveState() {
+    this.undoStack.push([...this.cities]);
+    this.redoStack = []; // Clear redo on new action
+  }
+
+  undo() {
+    if (this.undoStack.length > 0) {
+      this.redoStack.push([...this.cities]);
+      this.cities = this.undoStack.pop()!;
+      this.currentPath = null; // Clear path as indices may be invalid
+      this.recalculateDistances();
+      this.redraw();
+    }
+  }
+
+  redo() {
+    if (this.redoStack.length > 0) {
+      this.undoStack.push([...this.cities]);
+      this.cities = this.redoStack.pop()!;
+      this.currentPath = null; // Clear path as indices may be invalid
+      this.recalculateDistances();
+      this.redraw();
+    }
+  }
+
   private drawCircle(x: number, y: number, index: number) {
+    this.ctx.beginPath();
+    this.ctx.arc(x, y, this.CIRCLE_RADIUS * this.scale, 0, 2 * Math.PI);
+    this.ctx.fillStyle = 'red';
+    this.ctx.fill();
+
+    this.ctx.fillStyle = 'white';
+    this.ctx.font = `${12 * this.scale}px Arial`;
+    this.ctx.textAlign = 'center';
+    this.ctx.textBaseline = 'middle';
+    this.ctx.fillText((index + 1).toString(), x, y);
+  }
+
+  private drawFixedCircle(x: number, y: number, index: number) {
     this.ctx.beginPath();
     this.ctx.arc(x, y, this.CIRCLE_RADIUS, 0, 2 * Math.PI);
     this.ctx.fillStyle = 'red';
     this.ctx.fill();
 
     this.ctx.fillStyle = 'white';
-    this.ctx.font = this.FONT;
+    this.ctx.font = '12px Arial';
     this.ctx.textAlign = 'center';
     this.ctx.textBaseline = 'middle';
     this.ctx.fillText((index + 1).toString(), x, y);
   }
 
   private drawCalculatedPath(pathNodeIndices: number[]){
+    this.currentPath = pathNodeIndices;
     this.redraw();
-    if(this.cities.length < 2) return;
-    this.ctx.lineWidth = this.PATH_WIDTH;
-    for (let i = 0; i < pathNodeIndices.length - 1; i++) {
-        const current = this.cities[pathNodeIndices[i]];
-        const next = this.cities[pathNodeIndices[i + 1]];
-        this.ctx.beginPath();
-        this.ctx.moveTo(current.x, current.y);
-        this.ctx.lineTo(next.x, next.y);
-        this.ctx.stroke();
+  }
+
+  private drawGrid() {
+    this.ctx.strokeStyle = 'lightgray';
+    this.ctx.lineWidth = 1 / this.scale;
+    const gridSize = 100;
+    // Vertical lines
+    const startX = Math.floor((-this.offsetX / this.scale) / gridSize) * gridSize;
+    const endX = Math.ceil(((this.canvas.nativeElement.width - this.offsetX) / this.scale) / gridSize) * gridSize;
+    for (let x = startX; x <= endX; x += gridSize) {
+      this.ctx.beginPath();
+      this.ctx.moveTo(x, -10000);
+      this.ctx.lineTo(x, 10000);
+      this.ctx.stroke();
+    }
+    // Horizontal lines
+    const startY = Math.floor((-this.offsetY / this.scale) / gridSize) * gridSize;
+    const endY = Math.ceil(((this.canvas.nativeElement.height - this.offsetY) / this.scale) / gridSize) * gridSize;
+    for (let y = startY; y <= endY; y += gridSize) {
+      this.ctx.beginPath();
+      this.ctx.moveTo(-10000, y);
+      this.ctx.lineTo(10000, y);
+      this.ctx.stroke();
     }
   }
 
   private redraw() {
     this.ctx.clearRect(0, 0, this.canvas.nativeElement.width, this.canvas.nativeElement.height);
-    this.cities.forEach((circle,index) => this.drawCircle(circle.x, circle.y,index));
-    
+    this.ctx.save();
+    this.ctx.translate(this.offsetX, this.offsetY);
+    this.ctx.scale(this.scale, this.scale);
+    // Draw grid
+    this.drawGrid();
+    // Draw path under circles
+    if (this.currentPath && this.cities.length >= 2) {
+      this.ctx.strokeStyle = 'black';
+      this.ctx.lineWidth = 3 / this.scale;
+      for (let i = 0; i < this.currentPath.length - 1; i++) {
+        const current = this.cities[this.currentPath[i]];
+        const next = this.cities[this.currentPath[i + 1]];
+        this.ctx.beginPath();
+        this.ctx.moveTo(current.x, current.y);
+        this.ctx.lineTo(next.x, next.y);
+        this.ctx.stroke();
+      }
+    }
+    this.ctx.restore();
+    // Draw circles on top at fixed size
+    this.cities.forEach((circle, index) => {
+      const screenX = this.offsetX + circle.x * this.scale;
+      const screenY = this.offsetY + circle.y * this.scale;
+      this.drawFixedCircle(screenX, screenY, index);
+    });
   }
 
   private recalculateDistances(){
@@ -129,12 +317,11 @@ export class TspMapComponent implements AfterViewInit, OnInit {
           this.distances[i][j] = 0;
         }
         else{
-          this.distances[i][j] = Math.round(
-            Math.sqrt(
-              (to.x - from.x)**2 +
-              (to.y - from.y)**2
-            ) * this.ROUNDING_PRECISION
-          ) / this.ROUNDING_PRECISION;
+          let dx = to.x - from.x;
+          let dy = to.y - from.y;
+          let dist = Math.sqrt(dx * dx + dy * dy);
+          if (!isFinite(dist)) dist = 0;
+          this.distances[i][j] = Math.round(dist * this.ROUNDING_PRECISION) / this.ROUNDING_PRECISION;
         }
         j++;
       });
