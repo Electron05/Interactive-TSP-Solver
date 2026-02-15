@@ -72,7 +72,7 @@ std::vector<int> solveTSP(std::vector<std::vector<float>> distanceMatrix, float 
 				}
 			}
 		}
-		//Check if path is the best
+		// Check if path is the best
 		if(pathDistance < bestDistance){
 			bestDistance = pathDistance;
 			bestPath = path;
@@ -80,7 +80,6 @@ std::vector<int> solveTSP(std::vector<std::vector<float>> distanceMatrix, float 
 
 	}
 
-	// Add cout logs after every iteration
 	std::cout << "Best path: ";
 	for(int p : bestPath){
 		std::cout << p << " ";
