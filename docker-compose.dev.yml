@@ -3,7 +3,6 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile.dev
-    container_name: tsp-cpp-backend
     ports:
       - "8080:8080"
     networks:
@@ -18,7 +17,6 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: tsp-angular-frontend
     ports:
       - "4200:4200"
     networks:
