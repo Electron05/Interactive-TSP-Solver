@@ -8,6 +8,10 @@
 #include <tuple>
 #include <random>
 #include <thread>
+#include <mutex>
+#include <condition_variable>
+std::mutex tspMutex;
+std::condition_variable tspCV;
 
 struct AntContext {
     std::vector<std::vector<float>>& distanceMatrix;
@@ -21,14 +25,22 @@ struct Ant {
     float pathDistance = 0.0f; 
     std::vector<int> path; 
     std::vector<bool> visited;
-    std::vector<std::vector<bool>> edgeUsed;
+};
+
+struct ParallelContext {
+	int cores;
+	int antsFinished = 0;
+	int generation = 0;
+	float bestDistance = MAXFLOAT;
+	const Ant* bestAnt = nullptr;
+	std::vector<int> bestPath;
+	std::vector<Ant>* allAnts = nullptr;
 };
 
 void createRoute (  Ant& ant, const AntContext& context, std::mt19937& gen){
 
 	int n = context.distanceMatrix.size();
 	ant.visited.assign(n, false);
-	ant.edgeUsed.assign(n, std::vector<bool>(n, false));
 
 
 	// Pick ranodm starting node
@@ -59,7 +71,6 @@ void createRoute (  Ant& ant, const AntContext& context, std::mt19937& gen){
 		for(std::tuple<int, float> travel : travelProb){
 			if(nextNodeRoll > std::get<1>(travel)) continue; 
 			int nextNode = std::get<0>(travel);
-			ant.edgeUsed[node][nextNode] = true;
 			ant.pathDistance += context.distanceMatrix[node][nextNode];
 
 			node = nextNode;
@@ -72,22 +83,79 @@ void createRoute (  Ant& ant, const AntContext& context, std::mt19937& gen){
 	// Close the cycle
 	ant.path.push_back(startNode);
 	ant.pathDistance += context.distanceMatrix[node][startNode];
-	ant.edgeUsed[node][startNode] = true;
 }
 
-void checkIfBest(const Ant& ant, float& bestDistance, const Ant*& bestAnt){
-	if (ant.pathDistance < bestDistance) {
-		bestDistance = ant.pathDistance;
-		bestAnt = &ant;
-	}
+void updatePheromones(AntContext& context, ParallelContext& pc) {
+    int n = context.distanceMatrix.size();
+
+    for(int i = 0; i < n; i++) {
+        for(int j = 0; j < n; j++) {
+            context.pheromoneLevel[i][j] *= (1.0f - context.rho);
+            
+            // Prevent pheromones from hitting absolute 0.0f
+            if (context.pheromoneLevel[i][j] < 0.0001f) {
+                context.pheromoneLevel[i][j] = 0.0001f;
+            }
+        }
+    }
+
+    // ALL ants from the current generation deposit pheromones
+    for (const Ant& ant : *(pc.allAnts)) {
+        for(int i = 0; i < n; i++) {
+            int from = ant.path[i];
+            int to = ant.path[i+1];
+            context.pheromoneLevel[from][to] += 100.0f / ant.pathDistance;
+        }
+    }
+
+    // 3. Give an extra "elitist" boost to the global best path
+    for(int i = 0; i < n; i++) {
+        int from = pc.bestPath[i];
+        int to = pc.bestPath[i+1];
+        context.pheromoneLevel[from][to] += 100.0f / pc.bestDistance;
+    }
+}
+void antColonyWorker(int iterations, Ant& ant, AntContext& context, ParallelContext& pc, std::mt19937& gen) {
+    for(int i = 0; i < iterations; i++) {
+
+		ant.pathDistance = 0.0f;
+		ant.path.clear();
+
+        createRoute(ant,context,gen);
+		
+        {
+            std::unique_lock<std::mutex> lock(tspMutex);
+            
+            if (ant.pathDistance < pc.bestDistance) { 
+				std::cout << "Distance: " << ant.pathDistance << "\n";
+				pc.bestDistance = ant.pathDistance;
+				pc.bestAnt = &ant;
+			}
+            
+            pc.antsFinished++;
+            
+            if (pc.antsFinished == pc.cores) {
+                // JESTEM OSTATNI:
+				if(pc.bestAnt != nullptr)
+					pc.bestPath = pc.bestAnt->path;
+
+				updatePheromones(context,pc);
+
+				pc.bestAnt = nullptr;
+				pc.antsFinished = 0;
+				pc.generation++;
+				tspCV.notify_all();
+            } else {
+				int currentGen = pc.generation;
+                // NIE JESTEM OSTATNI:
+				tspCV.wait(lock, [&pc, currentGen] { return pc.generation != currentGen; });
+            }
+        }
+    }
 }
 
 std::vector<int> solveTSP(int cores, std::vector<std::vector<float>> distanceMatrix, float alpha, float beta, float rho){
-	float bestDistance = MAXFLOAT;
-	
-	std::vector<int> bestPath;
 
-	// Initialize pheromone levels
 	int n = distanceMatrix.size();
 	std::vector<float> pheromoneRow(n, 1.0f);
 	std::vector<std::vector<float>> pheromoneLevel(n, pheromoneRow);
@@ -100,47 +168,25 @@ std::vector<int> solveTSP(int cores, std::vector<std::vector<float>> distanceMat
         generators.push_back(std::mt19937(rd()));
     }
 
-	for(int iter = 0; iter < 1000; iter++){
-		std::vector<Ant> ants(cores);
-		std::vector<std::thread> threads;
+	std::vector<int> bestPathTmp;
+	ParallelContext parallel{cores};
 
-		for(int i = 0; i < cores; i++){
-			threads.push_back(std::thread(createRoute, std::ref(ants[i]),std::ref(context), std::ref(generators[i])));
-		}
-
-		for(int i = 0; i < cores; i++){
-			threads[i].join();
-		}
-
-
-		const Ant* bestAnt = nullptr;
-		for(int i = 0; i <cores; i++){
-			checkIfBest(ants[i], bestDistance, bestAnt);
-		}
-		if (bestAnt != nullptr) {
-            bestPath = bestAnt->path; 
-        }
-
-		// Update pheromone levels
-		for(int i = 0; i < n; i++){
-			for(int j = 0; j < n; j++){
-				pheromoneLevel[i][j] *= (1.0f-rho);
-			}
-		}
-		if (bestPath.empty()) continue;
-		for(int i = 0; i < n; i++){
-			int from = bestPath[i];
-			int to = bestPath[i+1];
-			pheromoneLevel[from][to] += 1/distanceMatrix[from][to];
-		}
+	std::vector<Ant> ants(cores);
+	std::vector<std::thread> threads;
+	parallel.allAnts = &ants;
+	for(int i = 0; i < cores; i++){
+		threads.push_back(std::thread(antColonyWorker, 10000, std::ref(ants[i]),std::ref(context), std::ref(parallel),std::ref(generators[i])));
+	}
+	for(int i = 0; i < cores; i++){
+		threads[i].join();
 	}
 
 	std::cout << "Best path: ";
-	for(int p : bestPath){
+	for(int p : parallel.bestPath){
 		std::cout << p << " ";
 	}
 	std::cout << std::endl;
-	std::cout << "Distance: " << bestDistance << std::endl;
+	std::cout << "Distance: " << parallel.bestDistance << std::endl;
 	
-	return bestPath;
+	return parallel.bestPath;
 }
