@@ -17,7 +17,7 @@ std::vector<int> solveTSP(std::vector<std::vector<float>> distanceMatrix, float 
 	std::vector<float> pheromoneRow(n, 1.0f);
 	std::vector<std::vector<float>> pheromoneLevel(n, pheromoneRow);
 	
-	// Let's simulate 1 ant, 1000 iterations
+	// 1 ant, 1000 iterations
 	for(int iter = 0; iter < 1000; iter++){
 		std::vector<int> path;
 		std::vector<bool> visited(n, false);
@@ -33,7 +33,7 @@ std::vector<int> solveTSP(std::vector<std::vector<float>> distanceMatrix, float 
 		std::random_device rd;
 		srand(rd());  // Use random_device for better entropy
 
-		// We wil travel to n-1 other nodes
+		// Ant wil travel to n-1 other nodes
 		for(int i = 0; i < n - 1; i++){
 			float totalProb = 0.0f;
 			std::vector<std::tuple<int,float>> travelProb; 
@@ -44,7 +44,7 @@ std::vector<int> solveTSP(std::vector<std::vector<float>> distanceMatrix, float 
 				travelProb.push_back(std::make_tuple(j,totalProb));
 			}
 
-			// Let's roll for next node
+			// Pick next node at weighted random
 			float nextNodeRoll = (float)rand() / RAND_MAX * totalProb;
 
 			for(std::tuple<int, float> travel : travelProb){
