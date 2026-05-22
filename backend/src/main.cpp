@@ -17,6 +17,8 @@ namespace net = boost::asio;
 using tcp = boost::asio::ip::tcp;
 using json = nlohmann::json;
 
+const int num_cores = std::thread::hardware_concurrency();
+
 
 // I am new to websockets so...
 // https://www.boost.org/doc/libs/1_82_0/libs/beast/example/websocket/server/async/websocket_server_async.cpp
@@ -48,7 +50,7 @@ void do_session(tcp::socket socket){
             float beta = query["beta"];
             float rho = query["rho"];
             
-            std::vector<int> payload = solveTSP(distanceMatrix, alpha, beta, rho);
+            std::vector<int> payload = solveTSP(std::max(num_cores/2,1), distanceMatrix, alpha, beta, rho);
 
             // Return calculated path
             json answer;
@@ -67,6 +69,7 @@ void do_session(tcp::socket socket){
 }
 
 int main(){
+
 	// I/O context for async operations
     net::io_context ioc;
 
@@ -74,10 +77,10 @@ int main(){
 	tcp::acceptor acceptor{ioc, tcp::endpoint{tcp::v4(), 8080}};
 
 	std::cout << "WebSocket server listening on port 8080..." << std::endl;
-    unsigned int num_cores = std::thread::hardware_concurrency();
     std::cout << "Threads: " << std::to_string(num_cores) << std::endl;
 	
     srand(time(0));  // Seed once here
+
     for(;;){
 		tcp::socket socket{ioc};
 		acceptor.accept(socket);

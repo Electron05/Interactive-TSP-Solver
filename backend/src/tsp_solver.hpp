@@ -3,6 +3,6 @@
 
 #include <vector>
 
-std::vector<int> solveTSP(std::vector<std::vector<float>> distanceMatrix, float alpha, float beta, float rho);
+std::vector<int> solveTSP(int cores, std::vector<std::vector<float>> distanceMatrix, float alpha, float beta, float rho);
 
 #endif
