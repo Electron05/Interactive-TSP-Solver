@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
+cmake_policy(SET CMP0167 NEW)
 
 project(AntTSPSolver VERSION 1.0)
 

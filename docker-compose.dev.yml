@@ -9,7 +9,6 @@ services:
       - tsp-network
     volumes:
       - .:/workspace:cached
-      - /workspace/backend/build
     working_dir: /workspace
     command: sh -c "while sleep 1000; do :; done"
 
