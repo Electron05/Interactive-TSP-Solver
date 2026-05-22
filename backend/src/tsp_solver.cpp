@@ -8,9 +8,6 @@
 #include <tuple>
 #include <random>
 #include <thread>
-#include <mutex>
-
-std::mutex tspMutex;
 
 struct AntContext {
     std::vector<std::vector<float>>& distanceMatrix;
@@ -27,15 +24,21 @@ struct Ant {
     std::vector<std::vector<bool>> edgeUsed;
 };
 
-void createRoute (  Ant& ant, const AntContext& context){
+void createRoute (  Ant& ant, const AntContext& context, std::mt19937& gen){
 
 	int n = context.distanceMatrix.size();
+	ant.visited.assign(n, false);
+	ant.edgeUsed.assign(n, std::vector<bool>(n, false));
+
 
 	// Pick ranodm starting node
-	int node = rand()%n;
+	std::uniform_int_distribution<int> startNodeDist(0, n - 1);
+    int node = startNodeDist(gen);
 	int startNode = node;
 	ant.visited[node] = true;
 	ant.path.push_back(node);
+
+	std::uniform_real_distribution<float> dis;
 
 	// Ant wil travel to n-1 other nodes
 	for(int i = 0; i < n - 1; i++){
@@ -50,10 +53,8 @@ void createRoute (  Ant& ant, const AntContext& context){
 		}
 
 		// Pick next node at weighted random
-		std::random_device rd;
-		std::mt19937 gen(rd());
-		std::uniform_real_distribution<float> dis(0.0f, totalProb);
-		float nextNodeRoll = dis(gen);
+        dis.param(std::uniform_real_distribution<float>::param_type(0.0f, totalProb));
+        float nextNodeRoll = dis(gen);
 
 		for(std::tuple<int, float> travel : travelProb){
 			if(nextNodeRoll > std::get<1>(travel)) continue; 
@@ -74,11 +75,10 @@ void createRoute (  Ant& ant, const AntContext& context){
 	ant.edgeUsed[node][startNode] = true;
 }
 
-void checkIfBest(const Ant& ant, float& bestDistance, std::vector<int>& bestPathCandidate){
-	std::lock_guard<std::mutex> lock(tspMutex);
+void checkIfBest(const Ant& ant, float& bestDistance, const Ant*& bestAnt){
 	if (ant.pathDistance < bestDistance) {
 		bestDistance = ant.pathDistance;
-		bestPathCandidate = ant.path;
+		bestAnt = &ant;
 	}
 }
 
@@ -94,38 +94,45 @@ std::vector<int> solveTSP(int cores, std::vector<std::vector<float>> distanceMat
 	
 	AntContext context{distanceMatrix,pheromoneLevel,alpha,beta,rho};
 
+	std::random_device rd;
+    std::vector<std::mt19937> generators;
+    for(int i = 0; i < cores; i++) {
+        generators.push_back(std::mt19937(rd()));
+    }
 
-	// 1 ant, 1000 iterations
 	for(int iter = 0; iter < 1000; iter++){
 		std::vector<Ant> ants(cores);
 		std::vector<std::thread> threads;
 
 		for(int i = 0; i < cores; i++){
-			threads.push_back(std::thread(createRoute, std::ref(ants[i]),std::ref(context)));
+			threads.push_back(std::thread(createRoute, std::ref(ants[i]),std::ref(context), std::ref(generators[i])));
 		}
 
 		for(int i = 0; i < cores; i++){
 			threads[i].join();
 		}
 
-		std::vector<int>& bestPathCandidate = bestPath;
-		int bestAntIndex = -1;
+
+		const Ant* bestAnt = nullptr;
 		for(int i = 0; i <cores; i++){
-			checkIfBest(ants[i], bestDistance, bestPathCandidate);
+			checkIfBest(ants[i], bestDistance, bestAnt);
 		}
-		bestPath = bestPathCandidate;
+		if (bestAnt != nullptr) {
+            bestPath = bestAnt->path; 
+        }
+
 		// Update pheromone levels
 		for(int i = 0; i < n; i++){
 			for(int j = 0; j < n; j++){
 				pheromoneLevel[i][j] *= (1.0f-rho);
 			}
 		}
-		for(int i = 0; i < n-1; i++){
+		if (bestPath.empty()) continue;
+		for(int i = 0; i < n; i++){
 			int from = bestPath[i];
 			int to = bestPath[i+1];
 			pheromoneLevel[from][to] += 1/distanceMatrix[from][to];
 		}
-		bestPath = std::vector<int>(bestPath);
 	}
 
 	std::cout << "Best path: ";
