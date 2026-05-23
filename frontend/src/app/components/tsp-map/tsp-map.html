@@ -10,6 +10,7 @@
       <label>Alpha (Pheromone): {{alpha}} <input type="range" min="0" max="5" step="0.1" [(ngModel)]="alpha" /></label>
       <label>Beta (Distance): {{beta}} <input type="range" min="1" max="5" step="0.1" [(ngModel)]="beta" /></label>
       <label>Rho (Evaporation): {{rho}} <input type="range" min="0.01" max="0.8" step="0.01" [(ngModel)]="rho" /></label>
+      <label>Iterations: {{iterations}} <input type="range" min="500" max="10000" step="100" [(ngModel)]="iterations" /></label>
     </div>
   </div>
   <button (click)="sendDistances()" [disabled]="cities.length < 2">Solve TSP</button>

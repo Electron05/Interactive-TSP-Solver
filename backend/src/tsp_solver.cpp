@@ -170,7 +170,11 @@ void antColonyWorker(websocket::stream<tcp::socket>& ws, int iterations, Ant& an
     }
 }
 
-void solveTSP(websocket::stream<tcp::socket>& ws, int cores, std::vector<std::vector<float>> distanceMatrix, float alpha, float beta, float rho){
+void solveTSP(  websocket::stream<tcp::socket>& ws, 
+				int cores,
+				int iterations,
+				std::vector<std::vector<float>> distanceMatrix, 
+				float alpha, float beta, float rho){
 
 	int n = distanceMatrix.size();
 	std::vector<float> pheromoneRow(n, 1.0f);
@@ -192,7 +196,7 @@ void solveTSP(websocket::stream<tcp::socket>& ws, int cores, std::vector<std::ve
 	parallel.allAnts = &ants;
 
 	for(int i = 0; i < cores; i++){
-		threads.push_back(std::thread(antColonyWorker, std::ref(ws), 10000, std::ref(ants[i]),std::ref(context), std::ref(parallel),std::ref(generators[i])));
+		threads.push_back(std::thread(antColonyWorker, std::ref(ws), iterations, std::ref(ants[i]),std::ref(context), std::ref(parallel),std::ref(generators[i])));
 	}
 	for(int i = 0; i < cores; i++){
 		threads[i].join();

@@ -19,6 +19,7 @@ export class TspMapComponent implements AfterViewInit, OnInit {
   public alpha: number = 1;
   public beta: number = 2;
   public rho: number = 0.1;
+  public iterations: number = 500;
   public showTable: boolean = true;
 
   private readonly CIRCLE_RADIUS = 10;
@@ -322,7 +323,7 @@ export class TspMapComponent implements AfterViewInit, OnInit {
 
   sendDistances() {
     if (this.distances.length > 0) {
-      this.solverService.sendTSPData(this.distances, this.alpha, this.beta, this.rho);
+      this.solverService.sendTSPData(this.distances, this.alpha, this.beta, this.rho, this.iterations);
     }
   }
 }

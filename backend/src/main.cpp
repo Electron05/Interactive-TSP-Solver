@@ -49,8 +49,9 @@ void do_session(tcp::socket socket){
             float alpha = query["alpha"];
             float beta = query["beta"];
             float rho = query["rho"];
+            int iterations = query["iterations"];
             
-            solveTSP(ws, std::max(num_cores/2,1), distanceMatrix, alpha, beta, rho);
+            solveTSP(ws, std::max(num_cores/5*4,1), iterations, distanceMatrix, alpha, beta, rho);
 
             // Clear buffer for next message
             buffer.consume(buffer.size());
