@@ -1,25 +1,23 @@
-cmake_minimum_required(VERSION 3.10)
-cmake_policy(SET CMP0167 NEW)
+cmake_minimum_required(VERSION 3.15)
 
-project(AntTSPSolver VERSION 1.0)
+project(AntTSPSolver VERSION 1.0 LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-find_package(Threads REQUIRED)
-find_package(Boost REQUIRED COMPONENTS system)
-
-
-
-set(SOURCES 
+add_executable(solver
     src/main.cpp
     src/tsp_solver.cpp
 )
 
-add_executable(solver ${SOURCES})
+target_compile_features(solver PRIVATE cxx_std_20)
 
-target_include_directories(solver PRIVATE include ${Boost_INCLUDE_DIRS})
-target_link_libraries(solver PRIVATE Threads::Threads ${Boost_LIBRARIES})
+
+find_package(Threads REQUIRED)
+find_package(Boost REQUIRED COMPONENTS system)
+
+target_include_directories(solver PRIVATE include)
+target_link_libraries(solver PRIVATE
+    Threads::Threads
+    Boost::system)
+
 
 if(MSVC)
     target_compile_options(solver PRIVATE /W4)
