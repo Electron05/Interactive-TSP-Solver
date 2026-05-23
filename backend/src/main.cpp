@@ -50,14 +50,8 @@ void do_session(tcp::socket socket){
             float beta = query["beta"];
             float rho = query["rho"];
             
-            std::vector<int> payload = solveTSP(std::max(num_cores/2,1), distanceMatrix, alpha, beta, rho);
+            solveTSP(ws, std::max(num_cores/2,1), distanceMatrix, alpha, beta, rho);
 
-            // Return calculated path
-            json answer;
-            answer["type"] = "path1";
-            answer["payload"] = payload;
-            ws.write(net::buffer(answer.dump()));
-            
             // Clear buffer for next message
             buffer.consume(buffer.size());
         }

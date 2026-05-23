@@ -1,15 +1,26 @@
 #include "tsp_solver.hpp"
 
 #include <iostream>
-#include <vector>
-#include <algorithm>
-#include <cstdlib>
-#include <cmath>
-#include <tuple>
-#include <random>
+#include <boost/beast/core.hpp>
+#include <boost/beast/websocket.hpp>
+#include <boost/asio.hpp>
+#include <nlohmann/json.hpp>
+#include <memory>
 #include <thread>
+#include <vector>
+#include <cstdlib>
+#include <ctime>
 #include <mutex>
 #include <condition_variable>
+
+namespace beast = boost::beast;
+namespace http = beast::http;
+namespace websocket = beast::websocket;
+namespace net = boost::asio;
+using tcp = boost::asio::ip::tcp;
+using json = nlohmann::json;
+
+
 std::mutex tspMutex;
 std::condition_variable tspCV;
 
@@ -115,7 +126,8 @@ void updatePheromones(AntContext& context, ParallelContext& pc) {
         context.pheromoneLevel[from][to] += 100.0f / pc.bestDistance;
     }
 }
-void antColonyWorker(int iterations, Ant& ant, AntContext& context, ParallelContext& pc, std::mt19937& gen) {
+
+void antColonyWorker(websocket::stream<tcp::socket>& ws, int iterations, Ant& ant, AntContext& context, ParallelContext& pc, std::mt19937& gen) {
     for(int i = 0; i < iterations; i++) {
 
 		ant.pathDistance = 0.0f;
@@ -128,6 +140,10 @@ void antColonyWorker(int iterations, Ant& ant, AntContext& context, ParallelCont
             
             if (ant.pathDistance < pc.bestDistance) { 
 				std::cout << "Distance: " << ant.pathDistance << "\n";
+				json answer;
+				answer["type"] = "path1";
+				answer["payload"] = pc.bestPath;
+				ws.write(net::buffer(answer.dump()));
 				pc.bestDistance = ant.pathDistance;
 				pc.bestAnt = &ant;
 			}
@@ -154,7 +170,7 @@ void antColonyWorker(int iterations, Ant& ant, AntContext& context, ParallelCont
     }
 }
 
-std::vector<int> solveTSP(int cores, std::vector<std::vector<float>> distanceMatrix, float alpha, float beta, float rho){
+void solveTSP(websocket::stream<tcp::socket>& ws, int cores, std::vector<std::vector<float>> distanceMatrix, float alpha, float beta, float rho){
 
 	int n = distanceMatrix.size();
 	std::vector<float> pheromoneRow(n, 1.0f);
@@ -174,8 +190,9 @@ std::vector<int> solveTSP(int cores, std::vector<std::vector<float>> distanceMat
 	std::vector<Ant> ants(cores);
 	std::vector<std::thread> threads;
 	parallel.allAnts = &ants;
+
 	for(int i = 0; i < cores; i++){
-		threads.push_back(std::thread(antColonyWorker, 10000, std::ref(ants[i]),std::ref(context), std::ref(parallel),std::ref(generators[i])));
+		threads.push_back(std::thread(antColonyWorker, std::ref(ws), 10000, std::ref(ants[i]),std::ref(context), std::ref(parallel),std::ref(generators[i])));
 	}
 	for(int i = 0; i < cores; i++){
 		threads[i].join();
@@ -188,5 +205,11 @@ std::vector<int> solveTSP(int cores, std::vector<std::vector<float>> distanceMat
 	std::cout << std::endl;
 	std::cout << "Distance: " << parallel.bestDistance << std::endl;
 	
-	return parallel.bestPath;
+	// Return calculated path
+	json answer;
+	answer["type"] = "path1";
+	answer["payload"] = parallel.bestPath;
+	ws.write(net::buffer(answer.dump()));
+
+	return;
 }
